@@ -45,7 +45,7 @@ const D={"ZS":{"obj":[{"o":"Objectif 1: Renforcer la capacité de détection pr�
 const TABS=[['ind','Indicateurs'],['exa','Exactitude'],['pon','Pondération'],['int','Intrants']];
 let S={e:[],cur:null,tab:'ind'};
 try{S=Object.assign(S,JSON.parse(localStorage.getItem('evalZD26')||'{}'))}catch(x){}
-const API='https://script.google.com/macros/s/REMPLACER_PAR_VOTRE_ID/exec'; // URL de l’application web Google (laisser vide = mode local sans connexion)
+const API='https://script.google.com/macros/s/AKfycbypaTnI-K0AP31Q3eT0uHM20v22e0gBYcHbfBzquHfK-zOQC2pXDFUVb6pDqgIYf6d_/exec'; // URL de l’application web Google (laisser vide = mode local sans connexion)
 let T,W,busy=0;
 const ss=()=>{try{localStorage.setItem('evalZD26',JSON.stringify(S))}catch(x){}};
 const sv=()=>{const a=cur();if(a){a.u=Date.now();a.dirty=1}ss();if(API){clearTimeout(T);T=setTimeout(push,1500);stat()}};

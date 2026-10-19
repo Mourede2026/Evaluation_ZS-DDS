@@ -2,7 +2,7 @@
 // l'installation de l'application (PWA), et permet de continuer à ouvrir
 // l'app hors connexion (les données, elles, restent gérées par
 // localStorage + synchronisation avec le backend Google Sheets).
-const CACHE_NAME = "eval-zs-dds-v1";
+const CACHE_NAME = "eval-zs-dds-v2";
 const APP_SHELL = [
   "./",
   "./index.html",

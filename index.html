@@ -46,7 +46,7 @@ const TABS=[['ind','Indicateurs'],['exa','Exactitude'],['pon','Pondération'],['
 let S={e:[],cur:null,tab:'ind'};
 try{S=Object.assign(S,JSON.parse(localStorage.getItem('evalZD26')||'{}'))}catch(x){}
 let INIT=false;
-const API='https://script.google.com/macros/s/AKfycbypaTnI-K0AP31Q3eT0uHM20v22e0gBYcHbfBzquHfK-zOQC2pXDFUVb6pDqgIYf6d_/exec'; // URL de l’application web Google (laisser vide = mode local sans connexion)
+const API='https://script.google.com/macros/s/AKfycbzysa0atr-FDp-PZ5Oold5o2Jh-oMomHUjhgJ1dsf7OC87Ur3RTry0h2rnziASQJZPuog/exec'; // URL de l’application web Google (laisser vide = mode local sans connexion)
 let T,W,busy=0;
 const ss=()=>{try{localStorage.setItem('evalZD26',JSON.stringify(S))}catch(x){}};
 const sv=()=>{const a=cur();if(a){a.u=Date.now();a.dirty=1}ss();if(API){clearTimeout(T);T=setTimeout(push,1500);stat()}};

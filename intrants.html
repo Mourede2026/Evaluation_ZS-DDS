@@ -3,7 +3,7 @@
 <header><h1>Formulaire intrants — Zone sanitaire</h1></header>
 <div class="c" id="lg"><b>Connexion</b><label>Identifiant<input id="lu" autocomplete="username"></label><label>Mot de passe<input id="lp" type="password" autocomplete="current-password"></label><p style="margin:10px 0 0"><button onclick="lgn()">Se connecter</button></p><p id="le" style="color:#a11;margin:8px 0 0"></p></div>
 <div id="fm" style="display:none">
-<div class="c"><label>Zone sanitaire de votre évaluation<select id="z" onchange="zc()"><option value="">Chargement…</option></select></label><label id="zw" style="display:none">Nom de la zone sanitaire<input id="zt" placeholder="Saisir le nom exact"></label><label>Votre nom / structure<input id="by"></label></div>
+<div class="c"><p id="lk" style="display:none;margin:0 0 6px;font-weight:600"></p><div id="sel"><label>Niveau<select id="nv" onchange="zf()"><option value="ZS">Zone sanitaire</option><option value="DDS">DDS (département)</option></select></label><label>Structure<select id="z" onchange="zc()"><option value="">Chargement…</option></select></label><label id="zw" style="display:none">Nom de la structure<input id="zt" placeholder="Saisir le nom exact"></label></div><label>Votre nom<input id="by"></label></div>
 <div class="c"><label>Rechercher un intrant<input id="q" oninput="fq()"></label></div>
 <div class="c w"><table id="t"><tr><th>N°</th><th>Intrant</th><th>Stock dispo.</th><th>Péremption</th><th>Besoin exprimé</th></tr></table></div>
 <div id="m"></div><div class="c"><button onclick="send()">Envoyer les données</button><p style="margin:10px 0 0"><button style="background:var(--n)" onclick="pdf()">Télécharger le PDF</button></p><p style="font-size:.8rem;color:#555;margin:8px 0 0">Le PDF reprend les intrants renseignés. Après un envoi, il reste téléchargeable à partir du dernier envoi.</p></div></div>
@@ -19,24 +19,26 @@ function zc(){$('zw').style.display=$('z').value=='__autre'?'':'none'}
 function msg(t,ok){const m=$('m');m.className=ok?'ok':'er';m.textContent=t;m.style.display='block';m.scrollIntoView({behavior:'smooth'})}
 let U=null;try{U=JSON.parse(sessionStorage.getItem('intrU')||'null')}catch(x){}
 const api=d=>fetch(API,{method:'POST',body:JSON.stringify(Object.assign({user:U&&U.user,token:U&&U.token},d))}).then(r=>r.json());
-function show(){$('lg').style.display=U?'none':'';$('fm').style.display=U?'':'none';if(U)zl()}
-async function lgn(){$('le').textContent='';try{const j=await fetch(API,{method:'POST',body:JSON.stringify({a:'login',user:$('lu').value.trim(),pass:$('lp').value})}).then(r=>r.json());if(!j.ok){$('le').textContent=j.err||'Erreur';return}U={user:$('lu').value.trim(),token:j.token};try{sessionStorage.setItem('intrU',JSON.stringify(U))}catch(x){}$('lp').value='';show()}catch(x){$('le').textContent='Connexion impossible : vérifiez le réseau.'}}
-async function zl(){try{const j=await api({a:'zones'});if(!j.ok&&j.auth){U=null;sessionStorage.removeItem('intrU');show();return}const z=j.ok?j.zones:[];$('z').innerHTML='<option value="">— Choisir —</option>'+z.map(x=>`<option>${esc(x)}</option>`).join('')+'<option value="__autre">Autre (saisir le nom)</option>';if(z.length==1)$('z').value=z[0]}catch(x){$('z').innerHTML='<option value="__autre">Saisir le nom</option>';zc()}}
+function show(){$('lg').style.display=U?'none':'';$('fm').style.display=U?'':'none';if(U){$('sel').style.display=U.struct?'none':'';$('lk').style.display=U.struct?'':'none';$('lk').textContent='Structure : '+(U.struct||'');if(!U.struct)zl()}}
+async function lgn(){$('le').textContent='';try{const j=await fetch(API,{method:'POST',body:JSON.stringify({a:'login',user:$('lu').value.trim(),pass:$('lp').value})}).then(r=>r.json());if(!j.ok){$('le').textContent=j.err||'Erreur';return}U={user:$('lu').value.trim(),token:j.token,struct:j.struct||''};try{sessionStorage.setItem('intrU',JSON.stringify(U))}catch(x){}$('lp').value='';show()}catch(x){$('le').textContent='Connexion impossible : vérifiez le réseau.'}}
+let ZL=[];
+function zf(){const n=$('nv').value,z=ZL.filter(x=>x.n==n).map(x=>x.name);$('z').innerHTML='<option value="">— Choisir —</option>'+z.map(x=>`<option>${esc(x)}</option>`).join('')+'';if(z.length==1)$('z').value=z[0];zc()}
+async function zl(){try{const j=await api({a:'zones'});if(!j.ok&&j.auth){U=null;sessionStorage.removeItem('intrU');show();return}ZL=j.ok?j.zones:[];zf()}catch(x){$('z').innerHTML='<option value="">Liste indisponible : vérifiez la connexion</option>'}}
 show();
 function pdf(){
-let zone=($('z').value=='__autre'?$('zt').value:$('z').value).trim(),by=$('by').value.trim(),items={},d=new Date();
+let zone=U&&U.struct?U.struct:($('z').value=='__autre'?$('zt').value:$('z').value).trim(),nv=U&&U.struct?'':$('nv').value,by=$('by').value.trim(),items={},d=new Date();
 Object.keys(D).forEach(i=>{const r=D[i];if(r&&(r.s||r.p||r.b))items[i]=r});
-if(!Object.keys(items).length){let L=null;try{L=JSON.parse(localStorage.getItem('intrLast')||'null')}catch(x){}if(L){zone=L.zone;by=L.by;items=L.items;d=new Date(L.d)}}
+if(!Object.keys(items).length){let L=null;try{L=JSON.parse(localStorage.getItem('intrLast')||'null')}catch(x){}if(L){zone=L.zone;nv=L.n||'ZS';by=L.by;items=L.items;d=new Date(L.d)}}
 if(!Object.keys(items).length){msg('Aucune donnée à mettre dans le PDF.');return}
 if(!zone){msg('Choisissez ou saisissez la zone sanitaire pour le PDF.');return}
 if(!(window.jspdf&&window.jspdf.jsPDF)){msg('Le PDF ne peut pas être généré (bibliothèque non chargée). Vérifiez la connexion.');return}
 const doc=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-doc.setFontSize(14);doc.text('Intrants - Zone sanitaire : '+zone,14,16);
+doc.setFontSize(14);doc.text('Intrants - '+(nv=='DDS'?'DDS':nv=='ZS'?'Zone sanitaire':'Structure')+' : '+zone,14,16);
 doc.setFontSize(10);doc.text('Date : '+d.toLocaleDateString('fr-FR')+(by?'   |   Saisi par : '+by:''),14,23);
 const rows=Object.keys(items).map(Number).sort((a,b)=>a-b).map(i=>[i+1,IN[i],items[i].s||'',items[i].p?new Date(items[i].p).toLocaleDateString('fr-FR'):'',items[i].b||'']);
 doc.autoTable({startY:28,head:[['N°','Intrant','Stock dispo.','Péremption','Besoin exprimé']],body:rows,styles:{fontSize:9},headStyles:{fillColor:[18,49,79]},columnStyles:{0:{cellWidth:12},2:{cellWidth:25},3:{cellWidth:28},4:{cellWidth:28}}});
 doc.save('Intrants_'+zone.replace(/[^A-Za-z0-9]+/g,'_')+'_'+d.toISOString().slice(0,10)+'.pdf')}
-async function send(){const zone=($('z').value=='__autre'?$('zt').value:$('z').value).trim();if(!zone){msg('Choisissez ou saisissez la zone sanitaire.');return}
+async function send(){const zone=U&&U.struct?U.struct:($('z').value=='__autre'?$('zt').value:$('z').value).trim();if(!zone){msg('Choisissez ou saisissez la structure.');return}
 const items={};Object.keys(D).forEach(i=>{const r=D[i];if(r&&(r.s||r.p||r.b))items[i]=r});if(!Object.keys(items).length){msg('Aucune donnée saisie.');return}
-try{const j=await api({a:'intrSubmit',zone,by:$('by').value.trim(),items});if(j.auth){U=null;show();return}if(j.ok){try{localStorage.setItem('intrLast',JSON.stringify({zone,by:$('by').value.trim(),items,d:new Date().toISOString()}))}catch(x){}msg('✔ Données envoyées pour la zone « '+zone+' ». Vous pouvez télécharger le PDF.',1);D={};sd()}else msg(j.err||'Erreur')}catch(x){msg('Connexion impossible : vos données sont conservées sur cet appareil, réessayez.')}}
+try{const j=await api({a:'intrSubmit',zone,n:U&&U.struct?'*':$('nv').value,by:$('by').value.trim(),items});if(j.auth){U=null;show();return}if(j.ok){try{localStorage.setItem('intrLast',JSON.stringify({zone,n:U&&U.struct?'*':$('nv').value,by:$('by').value.trim(),items,d:new Date().toISOString()}))}catch(x){}msg('✔ Données envoyées pour la zone « '+zone+' ». Vous pouvez télécharger le PDF.',1);D={};sd()}else msg(j.err||'Erreur')}catch(x){msg('Connexion impossible : vos données sont conservées sur cet appareil, réessayez.')}}
 </script></body></html>

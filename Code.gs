@@ -15,15 +15,21 @@ const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(
 
 function setup() {
   const c = sh('Comptes');
-  if (c.getRange(1, 2).getValue() !== 'Mot de passe') {
-  c.getRange(1, 1, 1, 5).setValues([['Identifiant', 'Mot de passe', 'Rôle (admin ou acteur)', 'Nom affiché', 'Session (ne pas modifier)']]).setFontWeight('bold');
+  if (c.getRange(1, 3).getValue() !== 'Rôle (admin, acteur ou intrants)') {
+  c.getRange(1, 1, 1, 5).setValues([['Identifiant', 'Mot de passe', 'Rôle (admin, acteur ou intrants)', 'Nom affiché', 'Session (ne pas modifier)']]).setFontWeight('bold');
   c.getRange('A:B').setNumberFormat('@');
-  c.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'acteur'], true).setAllowInvalid(false).build());
+  c.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'acteur', 'intrants'], true).setAllowInvalid(false).build());
   c.setFrozenRows(1);
   }
+  const it = sh('Intrants');
+  if (it.getLastRow() < 1) it.appendRow(['Zone sanitaire', 'Date d’envoi', 'Envoyé par', 'Horodatage', 'Données (ne pas modifier)']);
   const e = sh('Evaluations');
   if (e.getLastRow() < 1) e.appendRow(['id', 'owner', 'niveau', 'structure', 'date', 'maj', 'json']);
 }
+
+const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function doGet() { return out({ ok: 1, msg: 'Serveur actif : le déploiement fonctionne.' }); }
 
 function doPost(e) {
   const L = LockService.getScriptLock(); L.waitLock(20000);
@@ -63,6 +69,17 @@ function run(d) {
   }
   const u = who(d);
   if (!u) return { ok: 0, err: 'Session expirée', auth: 1 };
+  if (u.role == 'intrants' && ['zones', 'intrSubmit', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement au formulaire intrants' };
+  if (d.a == 'zones') {
+    const z = {}; E.getDataRange().getValues().slice(1).forEach(x => { if (x[2] == 'ZS' && String(x[3]).trim()) z[norm(x[3])] = String(x[3]).trim(); });
+    return { ok: 1, zones: Object.keys(z).map(k => z[k]).sort() };
+  }
+  if (d.a == 'intrSubmit') {
+    if (!d.zone || !String(d.zone).trim() || !d.items || typeof d.items != 'object') return { ok: 0, err: 'Zone sanitaire et données requises' };
+    const js = JSON.stringify(d.items); if (js.length > 45000) return { ok: 0, err: 'Données trop volumineuses' };
+    sh('Intrants').appendRow([String(d.zone).trim().slice(0, 120), new Date(), (u.user + (d.by ? ' · ' + String(d.by) : '')).slice(0, 120), Date.now(), js]);
+    return { ok: 1 };
+  }
   if (d.a == 'push') {
     const ev = d.ev, v = E.getDataRange().getValues(); let r = 0;
     for (let i = 1; i < v.length; i++) if (v[i][0] == ev.id) { r = i + 1; break; }
@@ -74,7 +91,12 @@ function run(d) {
   }
   if (d.a == 'pull') {
     const v = E.getDataRange().getValues().slice(1).filter(x => u.role == 'admin' || x[1] == u.user);
-    return { ok: 1, ev: v.map(x => JSON.parse(x[6])) };
+    const zs = {}; v.forEach(x => { if (x[2] == 'ZS') zs[norm(x[3])] = 1; });
+    const last = {}; sh('Intrants').getDataRange().getValues().slice(1).forEach(x => {
+      const k = norm(x[0]); if (!k || (u.role != 'admin' && !zs[k])) return;
+      if (!last[k] || Number(x[3]) > last[k].ts) { try { last[k] = { z: x[0], ts: Number(x[3]), by: x[2], items: JSON.parse(x[4]) }; } catch (e) {} }
+    });
+    return { ok: 1, ev: v.map(x => JSON.parse(x[6])), intr: Object.keys(last).map(k => last[k]) };
   }
   if (d.a == 'chpass') {
     if (!d.np || String(d.np).length < 6) return { ok: 0, err: 'Mot de passe : 6 caractères minimum' };

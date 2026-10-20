@@ -48,7 +48,7 @@ function run(d) {
   setup();
   const C = sh('Comptes'), E = sh('Evaluations');
   const hasAdmin = () => C.getDataRange().getValues().slice(1).some(x => role(x[2]) == 'admin' && String(x[1]).trim() !== '');
-  if (d.a == 'status') return { ok: 1, init: hasAdmin() ? 0 : 1 };
+  if (d.a == 'status') return { ok: 1, init: hasAdmin() ? 0 : 1, n: C.getDataRange().getValues().slice(1).filter(x => String(x[0]).trim() !== '').length };
   if (d.a == 'init') {
     if (hasAdmin()) return { ok: 0, err: 'Un administrateur existe déjà' };
     if (!d.np || String(d.np).length < 6) return { ok: 0, err: 'Mot de passe : 6 caractères minimum' };
@@ -65,7 +65,8 @@ function run(d) {
       const t = Utilities.getUuid(); C.getRange(i + 1, 5).setValue(t);
       return { ok: 1, token: t, role: role(v[i][2]), label: v[i][3] };
     }
-    return { ok: 0, err: 'Identifiant ou mot de passe incorrect' };
+    const known = v.slice(1).some(x => String(x[0]).trim() == String(d.user).trim());
+    return { ok: 0, err: known ? 'Mot de passe incorrect pour cet identifiant' : 'Identifiant inconnu (' + (v.length - 1) + ' compte(s) lu(s) dans le Sheet)' };
   }
   const u = who(d);
   if (!u) return { ok: 0, err: 'Session expirée', auth: 1 };

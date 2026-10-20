@@ -96,7 +96,7 @@ function run(d) {
   if (d.a == 'push') {
     const ev = d.ev, v = E.getDataRange().getValues(); let r = 0;
     for (let i = 1; i < v.length; i++) if (v[i][0] == ev.id) { r = i + 1; break; }
-    if (r && u.role != 'admin' && v[r - 1][1] != u.user) return { ok: 0, err: 'Interdit' };
+    if (r && u.role != 'admin' && v[r - 1][1] != u.user && !(u.struct && norm(v[r - 1][3]) == norm(u.struct))) return { ok: 0, err: 'Interdit' };
     const sn = ev.n == 'ZS' ? ev.zone : ev.dep;
     if (String(sn || '').trim()) {
       if (u.role != 'admin' && u.struct && norm(sn) != norm(u.struct)) return { ok: 0, err: 'Ce compte est rattaché à la structure « ' + u.struct + ' »' };
@@ -108,7 +108,7 @@ function run(d) {
     return { ok: 1 };
   }
   if (d.a == 'pull') {
-    const v = E.getDataRange().getValues().slice(1).filter(x => u.role == 'admin' || x[1] == u.user);
+    const v = E.getDataRange().getValues().slice(1).filter(x => u.role == 'admin' || x[1] == u.user || (u.struct && norm(x[3]) == norm(u.struct)));
     const mine = {}; v.forEach(x => { mine[(x[2] == 'DDS' ? 'DDS' : 'ZS') + '|' + norm(x[3])] = 1; });
     const last = {}; sh('Intrants').getDataRange().getValues().slice(1).forEach(x => {
       const n = x[5] == '*' ? '*' : x[5] == 'DDS' ? 'DDS' : 'ZS', nm = norm(x[0]), p = String(x[2]).split(' · ');

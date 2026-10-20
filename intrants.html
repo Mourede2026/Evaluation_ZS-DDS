@@ -3,7 +3,7 @@
 <header><h1>Formulaire intrants — Zone sanitaire</h1></header>
 <div class="c" id="lg"><b>Connexion</b><label>Identifiant<input id="lu" autocomplete="username"></label><label>Mot de passe<input id="lp" type="password" autocomplete="current-password"></label><p style="margin:10px 0 0"><button onclick="lgn()">Se connecter</button></p><p id="le" style="color:#a11;margin:8px 0 0"></p></div>
 <div id="fm" style="display:none">
-<div class="c"><label>Zone sanitaire<select id="z" onchange="zc()"><option value="">Chargement…</option></select></label><label id="zw" style="display:none">Nom de la zone sanitaire<input id="zt" placeholder="Saisir le nom exact"></label><label>Votre nom / structure<input id="by"></label></div>
+<div class="c"><label>Zone sanitaire de votre évaluation<select id="z" onchange="zc()"><option value="">Chargement…</option></select></label><label id="zw" style="display:none">Nom de la zone sanitaire<input id="zt" placeholder="Saisir le nom exact"></label><label>Votre nom / structure<input id="by"></label></div>
 <div class="c"><label>Rechercher un intrant<input id="q" oninput="fq()"></label></div>
 <div class="c w"><table id="t"><tr><th>N°</th><th>Intrant</th><th>Stock dispo.</th><th>Péremption</th><th>Besoin exprimé</th></tr></table></div>
 <div id="m"></div><div class="c"><button onclick="send()">Envoyer les données</button><p style="margin:10px 0 0"><button style="background:var(--n)" onclick="pdf()">Télécharger le PDF</button></p><p style="font-size:.8rem;color:#555;margin:8px 0 0">Le PDF reprend les intrants renseignés. Après un envoi, il reste téléchargeable à partir du dernier envoi.</p></div></div>
@@ -21,7 +21,7 @@ let U=null;try{U=JSON.parse(sessionStorage.getItem('intrU')||'null')}catch(x){}
 const api=d=>fetch(API,{method:'POST',body:JSON.stringify(Object.assign({user:U&&U.user,token:U&&U.token},d))}).then(r=>r.json());
 function show(){$('lg').style.display=U?'none':'';$('fm').style.display=U?'':'none';if(U)zl()}
 async function lgn(){$('le').textContent='';try{const j=await fetch(API,{method:'POST',body:JSON.stringify({a:'login',user:$('lu').value.trim(),pass:$('lp').value})}).then(r=>r.json());if(!j.ok){$('le').textContent=j.err||'Erreur';return}U={user:$('lu').value.trim(),token:j.token};try{sessionStorage.setItem('intrU',JSON.stringify(U))}catch(x){}$('lp').value='';show()}catch(x){$('le').textContent='Connexion impossible : vérifiez le réseau.'}}
-async function zl(){try{const j=await api({a:'zones'});if(!j.ok&&j.auth){U=null;sessionStorage.removeItem('intrU');show();return}const z=j.ok?j.zones:[];$('z').innerHTML='<option value="">— Choisir —</option>'+z.map(x=>`<option>${esc(x)}</option>`).join('')+'<option value="__autre">Autre (saisir le nom)</option>'}catch(x){$('z').innerHTML='<option value="__autre">Saisir le nom</option>';zc()}}
+async function zl(){try{const j=await api({a:'zones'});if(!j.ok&&j.auth){U=null;sessionStorage.removeItem('intrU');show();return}const z=j.ok?j.zones:[];$('z').innerHTML='<option value="">— Choisir —</option>'+z.map(x=>`<option>${esc(x)}</option>`).join('')+'<option value="__autre">Autre (saisir le nom)</option>';if(z.length==1)$('z').value=z[0]}catch(x){$('z').innerHTML='<option value="__autre">Saisir le nom</option>';zc()}}
 show();
 function pdf(){
 let zone=($('z').value=='__autre'?$('zt').value:$('z').value).trim(),by=$('by').value.trim(),items={},d=new Date();

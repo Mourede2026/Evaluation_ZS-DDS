@@ -71,7 +71,7 @@ function run(d) {
   if (!u) return { ok: 0, err: 'Session expirée', auth: 1 };
   if (u.role == 'intrants' && ['zones', 'intrSubmit', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement au formulaire intrants' };
   if (d.a == 'zones') {
-    const z = {}; E.getDataRange().getValues().slice(1).forEach(x => { if (x[2] == 'ZS' && String(x[3]).trim()) z[norm(x[3])] = String(x[3]).trim(); });
+    const z = {}; E.getDataRange().getValues().slice(1).forEach(x => { if (x[2] == 'ZS' && String(x[3]).trim() && (u.role == 'admin' || x[1] == u.user)) z[norm(x[3])] = String(x[3]).trim(); });
     return { ok: 1, zones: Object.keys(z).map(k => z[k]).sort() };
   }
   if (d.a == 'intrSubmit') {
@@ -91,10 +91,10 @@ function run(d) {
   }
   if (d.a == 'pull') {
     const v = E.getDataRange().getValues().slice(1).filter(x => u.role == 'admin' || x[1] == u.user);
-    const zs = {}; v.forEach(x => { if (x[2] == 'ZS') zs[norm(x[3])] = 1; });
     const last = {}; sh('Intrants').getDataRange().getValues().slice(1).forEach(x => {
-      const k = norm(x[0]); if (!k || (u.role != 'admin' && !zs[k])) return;
-      if (!last[k] || Number(x[3]) > last[k].ts) { try { last[k] = { z: x[0], ts: Number(x[3]), by: x[2], items: JSON.parse(x[4]) }; } catch (e) {} }
+      const p = String(x[2]).split(' · '), who_ = p[0], k = norm(who_) + '|' + norm(x[0]);
+      if (!norm(x[0]) || (u.role != 'admin' && who_ != u.user)) return;
+      if (!last[k] || Number(x[3]) > last[k].ts) { try { last[k] = { z: x[0], u: who_, ts: Number(x[3]), by: p.slice(1).join(' · ') || who_, items: JSON.parse(x[4]) }; } catch (e) {} }
     });
     return { ok: 1, ev: v.map(x => JSON.parse(x[6])), intr: Object.keys(last).map(k => last[k]) };
   }

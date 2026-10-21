@@ -24,6 +24,7 @@ function setup() {
   if (c.getRange(1, 6).getValue() === '') c.getRange(1, 6).setValue('Structure rattachée (zone ou DDS, pour les comptes intrants)').setFontWeight('bold');
   const sts = sh('Structures');
   if (sts.getLastRow() < 1) { sts.getRange(1, 1, 1, 2).setValues([['Niveau (ZS ou DDS)', 'Nom de la structure']]).setFontWeight('bold'); sts.getRange('B:B').setNumberFormat('@'); sts.getRange(2, 1, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['ZS', 'DDS'], true).setAllowInvalid(false).build()); sts.setFrozenRows(1); }
+  if (c.getRange(2, 6).getDataValidation() == null) { c.getRange(2, 6, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sts.getRange('B2:B1000'), true).setAllowInvalid(true).build()); c.getRange(1, 6).setBackground('#fff2a8'); }
   const it = sh('Intrants');
   if (it.getLastRow() < 1) it.appendRow(['Structure (zone ou DDS)', 'Date d’envoi', 'Envoyé par', 'Horodatage', 'Données (ne pas modifier)', 'Niveau']);
   if (it.getRange(1, 6).getValue() === '') it.getRange(1, 6).setValue('Niveau');

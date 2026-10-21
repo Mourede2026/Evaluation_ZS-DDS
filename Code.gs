@@ -26,7 +26,8 @@ function setup() {
   if (sts.getLastRow() < 1) { sts.getRange(1, 1, 1, 2).setValues([['Niveau (ZS ou DDS)', 'Nom de la structure']]).setFontWeight('bold'); sts.getRange('B:B').setNumberFormat('@'); sts.getRange(2, 1, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['ZS', 'DDS'], true).setAllowInvalid(false).build()); sts.setFrozenRows(1); }
   if (c.getRange(2, 6).getDataValidation() == null) { c.getRange(2, 6, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sts.getRange('B2:B1000'), true).setAllowInvalid(true).build()); c.getRange(1, 6).setBackground('#fff2a8'); }
   const fs_ = sh('Fiches');
-  if (fs_.getLastRow() < 1) fs_.appendRow(['Zone sanitaire', 'Type (CS, PRIVE, HOP)', 'Formation sanitaire', 'Date', 'Envoyé par', 'Horodatage', 'Données (ne pas modifier)']);
+  if (fs_.getLastRow() < 1) fs_.appendRow(['Zone sanitaire', 'Type (CS, PRIVE, HOP)', 'Formation sanitaire', 'Date', 'Envoyé par', 'Horodatage', 'Données (ne pas modifier)', 'Statut (envoyée ou brouillon)']);
+  if (fs_.getRange(1, 8).getValue() === '') fs_.getRange(1, 8).setValue('Statut (envoyée ou brouillon)');
   const it = sh('Intrants');
   if (it.getLastRow() < 1) it.appendRow(['Structure (zone ou DDS)', 'Date d’envoi', 'Envoyé par', 'Horodatage', 'Données (ne pas modifier)', 'Niveau']);
   if (it.getRange(1, 6).getValue() === '') it.getRange(1, 6).setValue('Niveau');
@@ -88,13 +89,14 @@ function run(d) {
     const zl = stList().filter(x => x.n == 'ZS' && norm(x.name) == norm(zone))[0];
     if (!zl) return { ok: 0, err: 'Zone sanitaire inconnue : ce compte doit être rattaché à une zone sanitaire de la liste' };
     zone = zl.name; const F = sh('Fiches'), v = F.getDataRange().getValues();
-    if (d.a == 'ficheList') return { ok: 1, zone: zone, fiches: v.slice(1).filter(x => norm(x[0]) == norm(zone)).map(x => { let o = {}; try { o = JSON.parse(x[6]); } catch (e) {} return { t: x[1], name: x[2], date: x[3], by: x[4], ts: Number(x[5]), v: o }; }) };
+    if (d.a == 'ficheList') return { ok: 1, zone: zone, fiches: v.slice(1).filter(x => norm(x[0]) == norm(zone)).map(x => { let o = {}; try { o = JSON.parse(x[6]); } catch (e) {} return { t: x[1], name: x[2], date: x[3], by: x[4], ts: Number(x[5]), v: o, st: String(x[7] || 'envoyée') }; }) };
     if (['CS', 'PRIVE', 'HOP'].indexOf(d.t) < 0 || !String(d.name || '').trim()) return { ok: 0, err: 'Type et nom de la formation sanitaire requis' };
-    let row = 0; for (let i = 1; i < v.length; i++) if (norm(v[i][0]) == norm(zone) && v[i][1] == d.t && norm(v[i][2]) == norm(d.name)) { row = i + 1; break; }
-    if (d.a == 'ficheDel') { if (!row) return { ok: 0, err: 'Fiche introuvable' }; F.deleteRow(row); return { ok: 1 }; }
+    let row = 0, rowD = 0; for (let i = 1; i < v.length; i++) if (norm(v[i][0]) == norm(zone) && v[i][1] == d.t && norm(v[i][2]) == norm(d.name)) { if (String(v[i][7]) == 'brouillon') rowD = i + 1; else row = i + 1; }
+    if (d.a == 'ficheDel') { const r = d.draft ? rowD : row; if (!r) return { ok: 0, err: 'Fiche introuvable' }; F.deleteRow(r); return { ok: 1 }; }
     const js = JSON.stringify(d.v || {}); if (js.length > 45000) return { ok: 0, err: 'Données trop volumineuses' };
-    const rw = [zone, d.t, String(d.name).trim().slice(0, 120), String(d.date || '').slice(0, 20), u.user, Date.now(), js];
-    row ? F.getRange(row, 1, 1, 7).setValues([rw]) : F.appendRow(rw);
+    const rw = [zone, d.t, String(d.name).trim().slice(0, 120), String(d.date || '').slice(0, 20), u.user, Date.now(), js, d.draft ? 'brouillon' : 'envoyée'], tr = d.draft ? rowD : row;
+    tr ? F.getRange(tr, 1, 1, 8).setValues([rw]) : F.appendRow(rw);
+    if (!d.draft && rowD) F.deleteRow(rowD);
     return { ok: 1 };
   }
   if (d.a == 'zones') {
@@ -133,7 +135,7 @@ function run(d) {
       const k = n + '|' + nm;
       if (!last[k] || Number(x[3]) > last[k].ts) { try { last[k] = { n: n, z: x[0], ts: Number(x[3]), by: p.join(' · '), items: JSON.parse(x[4]) }; } catch (e) {} }
     });
-    const fi = []; sh('Fiches').getDataRange().getValues().slice(1).forEach(x => { const nm = norm(x[0]); if (!nm || (u.role != 'admin' && !mine['ZS|' + nm])) return; try { fi.push({ z: x[0], t: x[1], name: x[2], ts: Number(x[5]), v: JSON.parse(x[6]) }); } catch (e) {} });
+    const fi = []; sh('Fiches').getDataRange().getValues().slice(1).forEach(x => { const nm = norm(x[0]); if (!nm || String(x[7]) == 'brouillon' || (u.role != 'admin' && !mine['ZS|' + nm] && !(u.struct && norm(u.struct) == nm))) return; try { fi.push({ z: x[0], t: x[1], name: x[2], ts: Number(x[5]), v: JSON.parse(x[6]) }); } catch (e) {} });
     return { ok: 1, ev: v.map(x => JSON.parse(x[6])), intr: Object.keys(last).map(k => last[k]), st: stList(), fiches: fi };
   }
   if (d.a == 'chpass') {

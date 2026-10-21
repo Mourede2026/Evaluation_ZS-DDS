@@ -15,16 +15,18 @@ const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(
 
 function setup() {
   const c = sh('Comptes');
-  if (c.getRange(1, 3).getValue() !== 'Rôle (admin, acteur ou intrants)') {
-  c.getRange(1, 1, 1, 5).setValues([['Identifiant', 'Mot de passe', 'Rôle (admin, acteur ou intrants)', 'Nom affiché', 'Session (ne pas modifier)']]).setFontWeight('bold');
+  if (c.getRange(1, 3).getValue() !== 'Rôle (admin, acteur, intrants ou formation)') {
+  c.getRange(1, 1, 1, 5).setValues([['Identifiant', 'Mot de passe', 'Rôle (admin, acteur, intrants ou formation)', 'Nom affiché', 'Session (ne pas modifier)']]).setFontWeight('bold');
   c.getRange('A:B').setNumberFormat('@');
-  c.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'acteur', 'intrants'], true).setAllowInvalid(false).build());
+  c.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'acteur', 'intrants', 'formation'], true).setAllowInvalid(false).build());
   c.setFrozenRows(1);
   }
   if (c.getRange(1, 6).getValue() === '') c.getRange(1, 6).setValue('Structure rattachée (zone ou DDS, pour les comptes intrants)').setFontWeight('bold');
   const sts = sh('Structures');
   if (sts.getLastRow() < 1) { sts.getRange(1, 1, 1, 2).setValues([['Niveau (ZS ou DDS)', 'Nom de la structure']]).setFontWeight('bold'); sts.getRange('B:B').setNumberFormat('@'); sts.getRange(2, 1, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['ZS', 'DDS'], true).setAllowInvalid(false).build()); sts.setFrozenRows(1); }
   if (c.getRange(2, 6).getDataValidation() == null) { c.getRange(2, 6, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sts.getRange('B2:B1000'), true).setAllowInvalid(true).build()); c.getRange(1, 6).setBackground('#fff2a8'); }
+  const fm_ = sh('Formations');
+  if (fm_.getLastRow() < 1) { fm_.getRange(1, 1, 1, 4).setValues([['Formation sanitaire ou hôpital', 'Type (CS, PRIVE ou HOP)', 'Zone sanitaire rattachée', 'Identifiant du compte']]).setFontWeight('bold'); fm_.setFrozenRows(1); }
   const fs_ = sh('Fiches');
   if (fs_.getLastRow() < 1) fs_.appendRow(['Zone sanitaire', 'Type (CS, PRIVE, HOP)', 'Formation sanitaire', 'Date', 'Envoyé par', 'Horodatage', 'Données (ne pas modifier)', 'Statut (envoyée ou brouillon)']);
   if (fs_.getRange(1, 8).getValue() === '') fs_.getRange(1, 8).setValue('Statut (envoyée ou brouillon)');
@@ -36,6 +38,10 @@ function setup() {
 }
 
 const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function formReg() {
+  return sh('Formations').getDataRange().getValues().slice(1).filter(x => String(x[0]).trim() && String(x[3]).trim()).map(x => ({ name: String(x[0]).trim(), t: String(x[1]).trim().toUpperCase(), zone: String(x[2]).trim(), user: String(x[3]).trim() }));
+}
 
 function stList() {
   const L = []; sh('Structures').getDataRange().getValues().slice(1).forEach(x => { const nm = String(x[1]).trim(); if (nm) L.push({ n: String(x[0]).trim().toUpperCase() == 'DDS' ? 'DDS' : 'ZS', name: nm }); });
@@ -83,13 +89,19 @@ function run(d) {
   }
   const u = who(d);
   if (!u) return { ok: 0, err: 'Session expirée', auth: 1 };
+  if (u.role == 'formation' && ['ficheSubmit', 'ficheList', 'ficheDel', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement à la saisie des fiches' };
   if (u.role == 'intrants' && ['zones', 'intrSubmit', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement au formulaire intrants' };
   if (d.a == 'ficheSubmit' || d.a == 'ficheList' || d.a == 'ficheDel') {
-    let zone = u.role != 'admin' && u.struct ? u.struct : String(d.zone || '').trim();
+    let reg = null, zone = u.role != 'admin' && u.struct ? u.struct : String(d.zone || '').trim();
+    if (u.role == 'formation') {
+      reg = formReg().filter(x => x.user == u.user)[0];
+      if (!reg) return { ok: 0, err: 'Formation sanitaire non enregistrée : demandez à l’administrateur de l’ajouter' };
+      zone = reg.zone; d.t = reg.t; d.name = reg.name;
+    }
     const zl = stList().filter(x => x.n == 'ZS' && norm(x.name) == norm(zone))[0];
     if (!zl) return { ok: 0, err: 'Zone sanitaire inconnue : ce compte doit être rattaché à une zone sanitaire de la liste' };
     zone = zl.name; const F = sh('Fiches'), v = F.getDataRange().getValues();
-    if (d.a == 'ficheList') return { ok: 1, zone: zone, fiches: v.slice(1).filter(x => norm(x[0]) == norm(zone)).map(x => { let o = {}; try { o = JSON.parse(x[6]); } catch (e) {} return { t: x[1], name: x[2], date: x[3], by: x[4], ts: Number(x[5]), v: o, st: String(x[7] || 'envoyée') }; }) };
+    if (d.a == 'ficheList') return { ok: 1, zone: zone, reg: reg, fiches: v.slice(1).filter(x => norm(x[0]) == norm(zone) && (!reg || (x[1] == reg.t && norm(x[2]) == norm(reg.name)))).map(x => { let o = {}; try { o = JSON.parse(x[6]); } catch (e) {} return { t: x[1], name: x[2], date: x[3], by: x[4], ts: Number(x[5]), v: o, st: String(x[7] || 'envoyée') }; }) };
     if (['CS', 'PRIVE', 'HOP'].indexOf(d.t) < 0 || !String(d.name || '').trim()) return { ok: 0, err: 'Type et nom de la formation sanitaire requis' };
     let row = 0, rowD = 0; for (let i = 1; i < v.length; i++) if (norm(v[i][0]) == norm(zone) && v[i][1] == d.t && norm(v[i][2]) == norm(d.name)) { if (String(v[i][7]) == 'brouillon') rowD = i + 1; else row = i + 1; }
     if (d.a == 'ficheDel') { const r = d.draft ? rowD : row; if (!r) return { ok: 0, err: 'Fiche introuvable' }; F.deleteRow(r); return { ok: 1 }; }
@@ -153,6 +165,33 @@ function run(d) {
     const add = []; (d.names || []).forEach(nm => { nm = String(nm).trim(); if (nm && !have[n + '|' + norm(nm)]) { have[n + '|' + norm(nm)] = 1; add.push([n, nm]); } });
     if (add.length) { const S_ = sh('Structures'); S_.getRange(S_.getLastRow() + 1, 1, add.length, 2).setValues(add); }
     return { ok: 1, added: add.length };
+  }
+  if (d.a == 'formList') {
+    const pw = {}; C.getDataRange().getValues().slice(1).forEach(x => { pw[x[0]] = String(x[1]); });
+    return { ok: 1, list: formReg().map(x => ({ name: x.name, t: x.t, zone: x.zone, user: x.user, pass: pw[x.user] || '' })) };
+  }
+  if (d.a == 'addForm') {
+    const t = ['CS', 'PRIVE', 'HOP'].indexOf(d.t) >= 0 ? d.t : '', zl = stList().filter(x => x.n == 'ZS' && norm(x.name) == norm(d.zone))[0];
+    if (!t || !zl) return { ok: 0, err: 'Choisissez le type et une zone sanitaire de la liste des structures' };
+    const have = {}; formReg().forEach(x => { have[norm(x.name) + '|' + norm(x.zone) + '|' + x.t] = 1; });
+    const users = {}; C.getDataRange().getValues().slice(1).forEach(x => { users[String(x[0]).toLowerCase()] = 1; });
+    const reg = [], acc = [], out = [];
+    (d.names || []).forEach(nm => {
+      nm = String(nm).trim(); if (!nm || have[norm(nm) + '|' + norm(zl.name) + '|' + t]) return; have[norm(nm) + '|' + norm(zl.name) + '|' + t] = 1;
+      const base = 'fs-' + norm(zl.name).replace(/ /g, '').slice(0, 8) + '-' + norm(nm).replace(/ /g, '').slice(0, 10); let user = base, k = 2;
+      while (users[user]) user = base + (k++); users[user] = 1;
+      const pw = Utilities.getUuid().replace(/-/g, '').slice(0, 6);
+      reg.push([nm, t, zl.name, user]); acc.push([user, pw, 'formation', nm, '', nm]); out.push({ name: nm, user: user, pass: pw });
+    });
+    if (reg.length) { const F_ = sh('Formations'); F_.getRange(F_.getLastRow() + 1, 1, reg.length, 4).setValues(reg); C.getRange(C.getLastRow() + 1, 1, acc.length, 6).setValues(acc); }
+    return { ok: 1, added: out.length };
+  }
+  if (d.a == 'delForm') {
+    const F_ = sh('Formations'), fv = F_.getDataRange().getValues();
+    for (let i = 1; i < fv.length; i++) if (fv[i][3] == d.user) { F_.deleteRow(i + 1); break; }
+    const cv = C.getDataRange().getValues();
+    for (let i = 1; i < cv.length; i++) if (cv[i][0] == d.user && role(cv[i][2]) == 'formation') { C.deleteRow(i + 1); break; }
+    return { ok: 1 };
   }
   if (d.a == 'delStruct') {
     const v = sh('Structures').getDataRange().getValues();

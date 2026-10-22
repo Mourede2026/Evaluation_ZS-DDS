@@ -15,10 +15,10 @@ const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(
 
 function setup() {
   const c = sh('Comptes');
-  if (c.getRange(1, 3).getValue() !== 'Rôle (admin, acteur, intrants ou formation)') {
-  c.getRange(1, 1, 1, 5).setValues([['Identifiant', 'Mot de passe', 'Rôle (admin, acteur, intrants ou formation)', 'Nom affiché', 'Session (ne pas modifier)']]).setFontWeight('bold');
+  if (c.getRange(1, 3).getValue() !== 'Rôle (admin, acteur, intrants, formation ou enqueteur)') {
+  c.getRange(1, 1, 1, 5).setValues([['Identifiant', 'Mot de passe', 'Rôle (admin, acteur, intrants, formation ou enqueteur)', 'Nom affiché', 'Session (ne pas modifier)']]).setFontWeight('bold');
   c.getRange('A:B').setNumberFormat('@');
-  c.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'acteur', 'intrants', 'formation'], true).setAllowInvalid(false).build());
+  c.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'acteur', 'intrants', 'formation', 'enqueteur'], true).setAllowInvalid(false).build());
   c.setFrozenRows(1);
   }
   if (c.getRange(1, 6).getValue() === '') c.getRange(1, 6).setValue('Structure rattachée (zone ou DDS, pour les comptes intrants)').setFontWeight('bold');
@@ -89,8 +89,13 @@ function run(d) {
   }
   const u = who(d);
   if (!u) return { ok: 0, err: 'Session expirée', auth: 1 };
+  if (u.role == 'enqueteur' && ['collecteInfo', 'ficheSubmit', 'ficheList', 'ficheDel', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement à la collecte des fiches' };
   if (u.role == 'formation' && ['ficheSubmit', 'ficheList', 'ficheDel', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement à la saisie des fiches' };
   if (u.role == 'intrants' && ['zones', 'intrSubmit', 'chpass'].indexOf(d.a) < 0) return { ok: 0, err: 'Ce compte sert uniquement au formulaire intrants' };
+  if (d.a == 'collecteInfo') {
+    if (u.role == 'intrants' || u.role == 'formation') return { ok: 0, err: 'Accès refusé' };
+    return { ok: 1, reg: formReg().filter(x => u.role == 'admin' || !u.struct || norm(x.zone) == norm(u.struct)).map(x => ({ zone: x.zone, t: x.t, name: x.name })) };
+  }
   if (d.a == 'ficheSubmit' || d.a == 'ficheList' || d.a == 'ficheDel') {
     let reg = null, zone = u.role != 'admin' && u.struct ? u.struct : String(d.zone || '').trim();
     if (u.role == 'formation') {
@@ -101,6 +106,7 @@ function run(d) {
     const zl = stList().filter(x => x.n == 'ZS' && norm(x.name) == norm(zone))[0];
     if (!zl) return { ok: 0, err: 'Zone sanitaire inconnue : ce compte doit être rattaché à une zone sanitaire de la liste' };
     zone = zl.name; const F = sh('Fiches'), v = F.getDataRange().getValues();
+    if (u.role == 'enqueteur' && d.a == 'ficheSubmit' && !formReg().some(x => norm(x.zone) == norm(zone) && x.t == d.t && norm(x.name) == norm(d.name))) return { ok: 0, err: 'Formation sanitaire non paramétrée pour cette zone : demandez à l’administrateur de l’ajouter' };
     if (d.a == 'ficheList') return { ok: 1, zone: zone, reg: reg, fiches: v.slice(1).filter(x => norm(x[0]) == norm(zone) && (!reg || (x[1] == reg.t && norm(x[2]) == norm(reg.name)))).map(x => { let o = {}; try { o = JSON.parse(x[6]); } catch (e) {} return { t: x[1], name: x[2], date: x[3], by: x[4], ts: Number(x[5]), v: o, st: String(x[7] || 'envoyée') }; }) };
     if (['CS', 'PRIVE', 'HOP'].indexOf(d.t) < 0 || !String(d.name || '').trim()) return { ok: 0, err: 'Type et nom de la formation sanitaire requis' };
     let row = 0, rowD = 0; for (let i = 1; i < v.length; i++) if (norm(v[i][0]) == norm(zone) && v[i][1] == d.t && norm(v[i][2]) == norm(d.name)) { if (String(v[i][7]) == 'brouillon') rowD = i + 1; else row = i + 1; }
